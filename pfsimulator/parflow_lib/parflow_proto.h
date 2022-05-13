@@ -1415,6 +1415,7 @@ void cplparflowadvance_(double *current_time,
                         float  *exp_porosity,
                         float  *exp_saturation,
                         int    *num_soil_layers,
+                        int    *num_cpl_layers,
                         int    *ghost_size_i_lower, /* Number of ghost cells */
                         int    *ghost_size_j_lower,
                         int    *ghost_size_i_upper,
@@ -1422,7 +1423,8 @@ void cplparflowadvance_(double *current_time,
                         int    *ierror);
 
 void CPL2PF(float  *imp_array,
-            int    imp_layers,
+            int    imp_nz,
+            int    cpy_layers,
             int    ghost_size_i_lower, /* Number of ghost cells */
             int    ghost_size_j_lower,
             int    ghost_size_i_upper,
@@ -1433,7 +1435,7 @@ void CPL2PF(float  *imp_array,
 
 void PF2CPL(Vector *pf_vector,
             float  *exp_array,
-            int    exp_layers,
+            int    exp_nz,
             int    ghost_size_i_lower, /* Number of ghost cells */
             int    ghost_size_j_lower,
             int    ghost_size_i_upper,
