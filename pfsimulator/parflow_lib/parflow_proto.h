@@ -1407,7 +1407,8 @@ void PF2WRF(Vector *pf_vector,
             Vector *top);
 
 /* cpl_parflow.c */
-void cplparflowinit_(char *input_file,
+void cplparflowinit_(int  *fcom,
+                     char *input_file,
                      int  *numprocs,
                      int  *subgridcount,
                      int  *nz,
