@@ -135,31 +135,17 @@ module parflow_nuopc
     character(32)              :: cname
     character(*), parameter    :: rname="InitializeP0"
     integer                    :: verbosity, diagnostic
-    character(len=64)          :: value
     type(type_InternalState)   :: is
     integer                    :: stat
 
     rc = ESMF_SUCCESS
 
-    ! Query component for name, verbosity, and diagnostic values
-    call ESMF_GridCompGet(gcomp, name=cname, rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Diagnostic", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    diagnostic = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65535, 65535,     0/), rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Verbosity", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    verbosity = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65281,  8193,     0/), rc=rc)
+    ! query component for name, verbosity, and diagnostic values
+    call NUOPC_CompGet(gcomp, name=cname, verbosity=verbosity, &
+      diagnostic=diagnostic, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
-    ! query Component for its internal State
+    ! query component for its internal State
     nullify(is%wrap)
     call ESMF_UserCompGetInternalState(gcomp, label_InternalState, is, rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -189,7 +175,7 @@ module parflow_nuopc
       logical                    :: attrIsPresent
       type(ESMF_Config)          :: config
       type(NUOPC_FreeFormat)     :: attrFF
-      character(len=64)          :: value
+      character(len=64)          :: attval
       character(ESMF_MAXSTR)     :: logMsg
       integer                    :: stat
       integer                    :: oldidx
@@ -213,62 +199,63 @@ module parflow_nuopc
         if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       endif
 
-      ! Realize all import fields
-      call ESMF_AttributeGet(gcomp, name="realize_all_import", value=value, &
-        defaultValue="false", convention="NUOPC", purpose="Instance", rc=rc)
+      ! realize all import fields
+      call ESMF_AttributeGet(gcomp, name="realize_all_import", &
+        value=is%wrap%realize_all_import, defaultvalue=.false., &
+        convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%realize_all_import = (trim(value)=="true")
 
-      ! Realize all export fields
-      call ESMF_AttributeGet(gcomp, name="realize_all_export", value=value, &
-        defaultValue="false", convention="NUOPC", purpose="Instance", rc=rc)
+      ! realize all export fields
+      call ESMF_AttributeGet(gcomp, name="realize_all_export", &
+        value=is%wrap%realize_all_export, defaultvalue=.false., &
+        convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%realize_all_export = (trim(value)=="true")
 
-      ! Set preprocessing information
+      ! set preprocessing information
       call ESMF_AttributeGet(gcomp, name="prep_filename", &
-        isPresent=attrIsPresent, convention="NUOPC", purpose="Instance", rc=rc)
+        isPresent=attrIsPresent, &
+        convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       if (attrIsPresent) then
         is%wrap%prep_run=.true.
-        call ESMF_AttributeGet(gcomp, name="prep_filename", value=value, &
-          defaultValue="config_file", convention="NUOPC", purpose="Instance", rc=rc)
+        call ESMF_AttributeGet(gcomp, name="prep_filename", &
+          value=is%wrap%prep_filename, defaultvalue="config_file", &
+          convention="NUOPC", purpose="Instance", rc=rc)
         if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-        is%wrap%prep_filename=value
-        call ESMF_AttributeGet(gcomp, name="prep_util", value=value, &
-          defaultValue="python3", convention="NUOPC", purpose="Instance", rc=rc)
+        call ESMF_AttributeGet(gcomp, name="prep_util", &
+          value=is%wrap%prep_util, defaultvalue="python3", &
+          convention="NUOPC", purpose="Instance", rc=rc)
         if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-        is%wrap%prep_util=value
       else
         is%wrap%prep_run=.false.
       endif
 
-      ! Set configuration file name
-      call ESMF_AttributeGet(gcomp, name="filename", value=value, &
-        defaultValue="config_file", convention="NUOPC", purpose="Instance", rc=rc)
+      ! set configuration file name
+      call ESMF_AttributeGet(gcomp, name="filename", &
+        value=is%wrap%pfidb_filename, defaultvalue="config_file", &
+        convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%pfidb_filename=value
 
       ! import data initialization type
       call ESMF_AttributeGet(gcomp, name="initialize_import", &
-        value=value, defaultValue="FLD_INIT_FILLV", &
+        value=attval, defaultvalue="FLD_INIT_FILLV", &
         convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%init_import = value
+      is%wrap%init_import = attval
 
       ! export data initialization type
       call ESMF_AttributeGet(gcomp, name="initialize_export", &
-        value=value, defaultValue="FLD_INIT_MODEL", &
+        value=attval, defaultvalue="FLD_INIT_MODEL", &
         convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%init_export = value
+      is%wrap%init_export = attval
 
       ! import check type
       call ESMF_AttributeGet(gcomp, name="check_import", &
-        value=value, defaultValue="FLD_CHECK_CURRT", &
+        value=attval, defaultvalue="FLD_CHECK_CURRT", &
         convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%check_import = value
+      is%wrap%check_import = attval
 
       ! geom source type
       ! ParFlow must provide geom
@@ -276,54 +263,51 @@ module parflow_nuopc
 
       ! grid coord type
       call ESMF_AttributeGet(gcomp, name="coord_type", &
-        value=value, defaultValue="GRD_COORD_CLMVEGTF", &
+        value=attval, defaultvalue="GRD_COORD_CLMVEGTF", &
         convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%ctype = value
+      is%wrap%ctype = attval
 
-      ! Set coordinates file name
+      ! set coordinates file name
       call ESMF_AttributeGet(gcomp, name="coord_filename", &
-        value=value, defaultValue="drv_vegm.alluv.dat", &
+        value=is%wrap%coord_filename, defaultvalue="drv_vegm.alluv.dat", &
         convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%coord_filename=value
 
-      ! Number of soil layers
+      ! number of soil layers
       call ESMF_AttributeGet(gcomp, name="number_of_soil_layers", &
-        value=value, defaultValue="4", &
+        value=is%wrap%cplnz, defaultvalue=4, &
         convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%cplnz = ESMF_UtilString2Int(value, rc=rc)
-      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
-      ! Thickness of soil layers
+      ! thickness of soil layers
       allocate(is%wrap%cpldz(is%wrap%cplnz), stat=stat)
       if (ESMF_LogFoundAllocError(statusToCheck=stat, &
         msg='Allocation of soil thickness memory failed.', &
         line=__LINE__, file=__FILE__, rcToReturn=rc)) return  ! bail out
       is%wrap%cpldz = 0.0
       call ESMF_AttributeGet(gcomp, name="thickness_of_soil_layers", &
-        value=value, defaultValue="0.1,0.3,0.6,1.0,1.0,1.0,1.0,1.0", &
+        value=attval, defaultvalue="0.1,0.3,0.6,1.0,1.0,1.0,1.0,1.0", &
         convention="NUOPC", purpose="Instance", rc=rc)
       oldidx=1
       do i=1, is%wrap%cplnz
-        value=adjustl(value(oldidx:))
-        if (len_trim(value).lt.1) then
+        attval=adjustl(attval(oldidx:))
+        if (len_trim(attval).lt.1) then
           call ESMF_LogSetError(ESMF_RC_ARG_BAD, &
             msg="missing thickness_of_soil_layers", &
             line=__LINE__, file=__FILE__, rcToReturn=rc)
           return  ! bail out
         endif
-        newidx=index(value,",")
+        newidx=index(attval,",")
         if (newidx.eq.0) then
-          newidx=len(value)
+          newidx=len(attval)
         else
           newidx=newidx-1
         endif
-        is%wrap%cpldz(i) = ESMF_UtilString2Real(value(:newidx), rc=rc)
+        is%wrap%cpldz(i) = ESMF_UtilString2Real(attval(:newidx), rc=rc)
         if (ESMF_STDERRORCHECK(rc)) return  ! bail out
         oldidx=newidx+2
-      end do
+      enddo
       if (ANY(is%wrap%cpldz.le.0)) then
         call ESMF_LogSetError(ESMF_RC_ARG_BAD, &
           msg="thickness_of_soil_layers must be positive value", &
@@ -331,19 +315,17 @@ module parflow_nuopc
         return  ! bail out
       endif
 
-      ! Get component input directory
+      ! set component input directory
       call ESMF_AttributeGet(gcomp, name="input_directory", &
-        value=value, defaultValue=trim(cname)//"_INPUT", &
+        value=is%wrap%input_dir, defaultvalue=trim(cname)//"_INPUT", &
         convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%input_dir = trim(value)
 
       ! Get component output directory
       call ESMF_AttributeGet(gcomp, name="output_directory", &
-        value=value, defaultValue=trim(cname)//"_OUTPUT", &
+        value=is%wrap%output_dir, defaultvalue=trim(cname)//"_OUTPUT", &
         convention="NUOPC", purpose="Instance", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-      is%wrap%output_dir = trim(value)
 
       if (btest(verbosity,16)) then
         call ESMF_LogWrite(trim(cname)//": Settings",ESMF_LOGMSG_INFO)
@@ -353,28 +335,28 @@ module parflow_nuopc
         write (logMsg, "(A,(A,I0))") trim(cname)//': ', &
           '  Diagnostic               = ',diagnostic
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
-        value = is%wrap%init_export
+        attval = is%wrap%init_export
         write (logMsg, "(A,(A,A))") trim(cname)//': ', &
-          '  Initialize Export        = ',trim(value)
+          '  Initialize Export        = ',trim(attval)
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
-        value = is%wrap%init_import
+        attval = is%wrap%init_import
         write (logMsg, "(A,(A,A))") trim(cname)//': ', &
-          '  Initialize Import        = ',trim(value)
+          '  Initialize Import        = ',trim(attval)
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
-        value = is%wrap%geom_src
+        attval = is%wrap%geom_src
         write (logMsg, "(A,(A,A))") trim(cname)//': ', &
-          '  Geom Source              = ',trim(value)
+          '  Geom Source              = ',trim(attval)
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
-        value = is%wrap%ctype
+        attval = is%wrap%ctype
         write (logMsg, "(A,(A,A))") trim(cname)//': ', &
-          '  Coordinate Type          = ',trim(value)
+          '  Coordinate Type          = ',trim(attval)
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
         write (logMsg, "(A,(A,A))") trim(cname)//': ', &
           '  Coodinates Filename      = ',is%wrap%coord_filename
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
-        value = is%wrap%check_import
+        attval = is%wrap%check_import
         write (logMsg, "(A,(A,A))") trim(cname)//': ', &
-          '  Check Import             = ',trim(value)
+          '  Check Import             = ',trim(attval)
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
         write (logMsg, "(A,(A,L1))") trim(cname)//': ', &
           '  Realze All Imports       = ',is%wrap%realize_all_import
@@ -397,8 +379,8 @@ module parflow_nuopc
         write (logMsg, "(A,(A,I0))") trim(cname)//': ', &
           '  Number of Soil Layers    = ',is%wrap%cplnz
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
-        write (value, "(I0)") is%wrap%cplnz
-        write (logMsg, "(A,(A,"//trim(value)//"(1X,F4.1)))") &
+        write (attval, "(I0)") is%wrap%cplnz
+        write (logMsg, "(A,(A,"//trim(attval)//"(1X,F4.1)))") &
           trim(cname)//': ','  Thickness of Soil Layers = ',is%wrap%cpldz
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
         write (logMsg, "(A,(A,A))") trim(cname)//': ', &
@@ -425,31 +407,17 @@ module parflow_nuopc
     character(32)              :: cname
     character(*), parameter    :: rname="InitializeP1"
     integer                    :: verbosity, diagnostic
-    character(len=64)          :: value
     type(type_InternalState)   :: is
     integer                    :: stat
 
     rc = ESMF_SUCCESS
 
-    ! Query component for name, verbosity, and diagnostic values
-    call ESMF_GridCompGet(gcomp, name=cname, rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Diagnostic", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    diagnostic = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65535, 65535,     0/), rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Verbosity", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    verbosity = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65281,  8193,     0/), rc=rc)
+    ! query component for name, verbosity, and diagnostic values
+    call NUOPC_CompGet(gcomp, name=cname, verbosity=verbosity, &
+      diagnostic=diagnostic, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
-    ! query Component for its internal State
+    ! query component for its internal State
     nullify(is%wrap)
     call ESMF_UserCompGetInternalState(gcomp, label_InternalState, is, rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -488,7 +456,6 @@ module parflow_nuopc
     character(32)                  :: cname
     character(*), parameter        :: rname="InitializeP3"
     integer                        :: verbosity, diagnostic
-    character(len=64)              :: value
     type(type_InternalState)       :: is
     type(ESMF_VM)                  :: vm
     integer                        :: comm
@@ -505,25 +472,12 @@ module parflow_nuopc
 
     rc = ESMF_SUCCESS
 
-    ! Query component for name, verbosity, and diagnostic values
-    call ESMF_GridCompGet(gcomp, name=cname, rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Diagnostic", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    diagnostic = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65535, 65535,     0/), rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Verbosity", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    verbosity = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65281,  8193,     0/), rc=rc)
+    ! query component for name, verbosity, and diagnostic values
+    call NUOPC_CompGet(gcomp, name=cname, verbosity=verbosity, &
+      diagnostic=diagnostic, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
-    ! query Component for its internal State
+    ! query component for its internal State
     nullify(is%wrap)
     call ESMF_UserCompGetInternalState(gcomp, label_InternalState, is, rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -746,30 +700,16 @@ module parflow_nuopc
     character(32)            :: cname
     character(*), parameter  :: rname="SetClock"
     integer                  :: verbosity, diagnostic
-    character(len=64)        :: value
     type(type_InternalState) :: is
 
     rc = ESMF_SUCCESS
 
-    ! Query component for name, verbosity, and diagnostic values
-    call ESMF_GridCompGet(gcomp, name=cname, rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Diagnostic", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    diagnostic = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65535, 65535,     0/), rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Verbosity", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    verbosity = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65281,  8193,     0/), rc=rc)
+    ! query component for name, verbosity, and diagnostic values
+    call NUOPC_CompGet(gcomp, name=cname, verbosity=verbosity, &
+      diagnostic=diagnostic, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
-    ! query Component for its internal State
+    ! query component for its internal State
     nullify(is%wrap)
     call ESMF_UserCompGetInternalState(gcomp, label_InternalState, is, rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -793,7 +733,6 @@ module parflow_nuopc
     character(32)            :: cname
     character(*), parameter  :: rname="DataInitialize"
     integer                  :: verbosity, diagnostic
-    character(len=64)        :: value
     type(type_InternalState) :: is
     integer                  :: stat
     type(ESMF_Clock)         :: modelClock
@@ -812,25 +751,12 @@ module parflow_nuopc
 
     rc = ESMF_SUCCESS
 
-    ! Query component for name, verbosity, and diagnostic values
-    call ESMF_GridCompGet(gcomp, name=cname, rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Diagnostic", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    diagnostic = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65535, 65535,     0/), rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Verbosity", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    verbosity = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65281,  8193,     0/), rc=rc)
+    ! query component for name, verbosity, and diagnostic values
+    call NUOPC_CompGet(gcomp, name=cname, verbosity=verbosity, &
+      diagnostic=diagnostic, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
-    ! query Component for its internal State
+    ! query component for its internal State
     nullify(is%wrap)
     call ESMF_UserCompGetInternalState(gcomp, label_InternalState, is, rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -1013,7 +939,6 @@ module parflow_nuopc
     character(32)               :: cname
     character(*), parameter     :: rname="CheckImport"
     integer                     :: verbosity, diagnostic
-    character(len=64)           :: value
     type(type_InternalState)    :: is
     type(ESMF_State)            :: importState
     type(ESMF_Clock)            :: modelClock
@@ -1023,22 +948,9 @@ module parflow_nuopc
 
     rc = ESMF_SUCCESS
 
-    ! Query component for name, verbosity, and diagnostic values
-    call ESMF_GridCompGet(gcomp, name=cname, rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Diagnostic", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    diagnostic = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65535, 65535,     0/), rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Verbosity", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    verbosity = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65281,  8193,     0/), rc=rc)
+    ! query component for name, verbosity, and diagnostic values
+    call NUOPC_CompGet(gcomp, name=cname, verbosity=verbosity, &
+      diagnostic=diagnostic, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
     ! query component for its internal State
@@ -1108,22 +1020,9 @@ module parflow_nuopc
 
     rc = ESMF_SUCCESS
 
-    ! Query component for name, verbosity, and diagnostic values
-    call ESMF_GridCompGet(gcomp, name=cname, rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Diagnostic", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    diagnostic = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65535, 65535,     0/), rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Verbosity", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    verbosity = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65281,  8193,     0/), rc=rc)
+    ! query component for name, verbosity, and diagnostic values
+    call NUOPC_CompGet(gcomp, name=cname, verbosity=verbosity, &
+      diagnostic=diagnostic, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
     ! query component for its internal State
@@ -1277,31 +1176,17 @@ module parflow_nuopc
     character(32)              :: cname
     character(*), parameter    :: rname="ModelFinalize"
     integer                    :: verbosity, diagnostic
-    character(len=64)          :: value
     type(type_InternalState)   :: is
     integer                    :: stat
 
     rc = ESMF_SUCCESS
 
-    ! Query component for name, verbosity, and diagnostic values
-    call ESMF_GridCompGet(gcomp, name=cname, rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Diagnostic", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    diagnostic = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65535, 65535,     0/), rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    call ESMF_AttributeGet(gcomp, name="Verbosity", value=value, &
-      defaultValue="0", convention="NUOPC", purpose="Instance", rc=rc)
-    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    verbosity = ESMF_UtilString2Int(value, &
-      specialStringList=(/"max ","high","low ","off "/), &
-      specialValueList= (/ 65535, 65281,  8193,     0/), rc=rc)
+    ! query component for name, verbosity, and diagnostic values
+    call NUOPC_CompGet(gcomp, name=cname, verbosity=verbosity, &
+      diagnostic=diagnostic, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
-    ! query Component for its internal State
+    ! query component for its internal State
     nullify(is%wrap)
     call ESMF_UserCompGetInternalState(gcomp, label_InternalState, is, rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
