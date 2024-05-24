@@ -561,9 +561,10 @@ if ( ${PARFLOW_ENABLE_TOOLS} )
   add_subdirectory (pftools)
 endif ()
 
-# Optionally build the NUOPC cap
+# Optionally build the NUOPC cap and ESMX
 option(PARFLOW_ENABLE_NUOPC "Enable building of the Parflow nuopc" "False")
-if ( ${PARFLOW_ENABLE_NUOPC} )
+option(PARFLOW_ENABLE_ESMX "Enable building of ESMX" "False")
+if ( ${PARFLOW_ENABLE_NUOPC} OR ${PARFLOW_ENABLE_ESMX} )
   add_subdirectory (pfnuopc)
 endif ()
 
