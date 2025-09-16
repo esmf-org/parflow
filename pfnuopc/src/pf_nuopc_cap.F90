@@ -50,6 +50,7 @@ module parflow_nuopc
     character(len=64)      :: input_dir          = "."
     character(len=64)      :: output_dir         = "."
     type(ESMF_Time)        :: pf_epoch
+    type(ESMF_Time)        :: prevTime
   end type
 
   type type_InternalState
@@ -768,6 +769,13 @@ module parflow_nuopc
       rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
+    call ESMF_TimeSet(is%wrap%prevTime, &
+      yy=0, mm=1, dd=1, &
+       h=0,  m=0,  s=0, &
+      calkindflag=ESMF_CALKIND_GREGORIAN, &
+      rc=rc)
+    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+
   end subroutine
 
 !..................................................................
@@ -1098,6 +1106,20 @@ module parflow_nuopc
     call ESMF_TimeGet(currTime, timeString=currTimeStr, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
+    if (currTime .eq. is%wrap%prevTime) then
+      call ESMF_LogWrite(trim(cname)//": ModelAdvance currTime"// &
+        " repeated at "//trim(currTimeStr),ESMF_LOGMSG_WARNING)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    elseif (currTime .lt. is%wrap%prevTime) then
+      call ESMF_LogWrite(trim(cname)//": ModelAdvance currTime"// &
+        " reset to "//trim(currTimeStr), ESMF_LOGMSG_INFO)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    else
+      call ESMF_LogWrite(trim(cname)//": ModelAdvance currTime"// &
+        " advanced to "//trim(currTimeStr), ESMF_LOGMSG_INFO)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    endif
+
     ! check internal fields
     if(.not.associated(pf_flux%ptr)) then
       call ESMF_LogSetError(ESMF_RC_OBJ_INIT, msg="pf_flux missing", &
@@ -1210,6 +1232,8 @@ module parflow_nuopc
     ! prepare export data
     call field_prep_export(exportState, is%wrap%nz, is%wrap%cplnz, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+
+    is%wrap%prevTime = currTime
 
   end subroutine
 
