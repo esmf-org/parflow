@@ -11,26 +11,37 @@ module parflow_nuopc_fields
 
   private
 
-  type pf_fld_type
+  type pf_fld_2d_type
+    character(len=64)           :: fname      = "dummy" ! state name
+    character(len=64)           :: units      = "-"     ! units
+    type(ESMF_Field), pointer   :: efld       => null()
+    real(ESMF_KIND_R4), pointer :: ptr(:,:) => null()
+  endtype pf_fld_2d_type
+
+  type pf_fld_3d_type
     character(len=64)           :: fname      = "dummy" ! state name
     character(len=64)           :: units      = "-"     ! units
     type(ESMF_Field), pointer   :: efld       => null()
     real(ESMF_KIND_R4), pointer :: ptr(:,:,:) => null()
-  endtype pf_fld_type
+  endtype pf_fld_3d_type
 
   ! internal fields
-  type(pf_fld_type) :: pf_flux = &
-    pf_fld_type(fname="PF_FLUX      ", units="1 h-1")
-  type(pf_fld_type) :: pf_porosity = &
-    pf_fld_type(fname="PF_POROSITY  ", units="-")
-  type(pf_fld_type) :: pf_pressure = &
-    pf_fld_type(fname="PF_PRESSURE  ", units="m")
-  type(pf_fld_type) :: pf_saturation = &
-    pf_fld_type(fname="PF_SATURATION", units="-")
-  type(pf_fld_type) :: pf_specific = &
-    pf_fld_type(fname="PF_SPECIFIC  ", units="m3")
-  type(pf_fld_type) :: pf_zmult = &
-    pf_fld_type(fname="PF_ZMULT     ", units="m")
+  type(pf_fld_3d_type) :: pf_flux = &
+    pf_fld_3d_type(fname="PF_FLUX      ", units="1 h-1")
+  type(pf_fld_2d_type) :: pf_gws = &
+    pf_fld_2d_type(fname="PF_GWS       ", units="-")
+  type(pf_fld_3d_type) :: pf_porosity = &
+    pf_fld_3d_type(fname="PF_POROSITY  ", units="-")
+  type(pf_fld_3d_type) :: pf_pressure = &
+    pf_fld_3d_type(fname="PF_PRESSURE  ", units="m")
+  type(pf_fld_3d_type) :: pf_saturation = &
+    pf_fld_3d_type(fname="PF_SATURATION", units="-")
+  type(pf_fld_3d_type) :: pf_smois = &
+    pf_fld_3d_type(fname="PF_SMOIS     ", units="-")
+  type(pf_fld_3d_type) :: pf_specific = &
+    pf_fld_3d_type(fname="PF_SPECIFIC  ", units="m3")
+  type(pf_fld_3d_type) :: pf_zmult = &
+    pf_fld_3d_type(fname="PF_ZMULT     ", units="m")
 
   type pf_nuopc_fld_type
     sequence
@@ -70,17 +81,17 @@ module parflow_nuopc_fields
     pf_nuopc_fld_type("saturation                              ", &
       "SATURATION", "-         ",  .TRUE., .FALSE.,  .TRUE.), &
     pf_nuopc_fld_type("ground_water_storage                    ", &
-      "GWS       ", "-         ", .FALSE., .FALSE.,  .TRUE.), &
+      "GWS       ", "-         ", .FALSE., .TRUE.,  .TRUE.), &
     pf_nuopc_fld_type("soil_moisture_fraction                  ", &
       "SMOIS     ", "-         ",  .TRUE., .FALSE.,  .TRUE.), &
     pf_nuopc_fld_type("soil_moisture_fraction_layer_1          ", &
-      "SMOIS1     ", "-        ", .FALSE., .FALSE.,  .TRUE.), &
+      "SMOIS1     ", "-        ", .FALSE., .TRUE.,  .TRUE.), &
     pf_nuopc_fld_type("soil_moisture_fraction_layer_2          ", &
-      "SMOIS2     ", "-        ", .FALSE., .FALSE.,  .TRUE.), &
+      "SMOIS2     ", "-        ", .FALSE., .TRUE.,  .TRUE.), &
     pf_nuopc_fld_type("soil_moisture_fraction_layer_3          ", &
-      "SMOIS3     ", "-        ", .FALSE., .FALSE.,  .TRUE.), &
+      "SMOIS3     ", "-        ", .FALSE., .TRUE.,  .TRUE.), &
     pf_nuopc_fld_type("soil_moisture_fraction_layer_4          ", &
-      "SMOIS4     ", "-        ", .FALSE., .FALSE.,  .TRUE.), &
+      "SMOIS4     ", "-        ", .FALSE., .TRUE.,  .TRUE.), &
     pf_nuopc_fld_type("liquid_fraction_of_soil_moisture        ", &
       "SH2O       ", "-        ",  .TRUE., .FALSE.,  .TRUE.), &
     pf_nuopc_fld_type("liquid_fraction_of_soil_moisture_layer_1", &
@@ -95,9 +106,11 @@ module parflow_nuopc_fields
   integer(ESMF_KIND_I4), pointer :: fld_mask(:,:) => null()
 
   public pf_flux
+  public pf_gws
   public pf_porosity
   public pf_pressure
   public pf_saturation
+  public pf_smois
   public pf_specific
   public pf_zmult
   public pf_nuopc_fld_list
@@ -166,6 +179,19 @@ module parflow_nuopc_fields
         const1=ESMF_DEFAULT_VALUE, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return
     endif
+    if (associated(pf_gws%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_gws exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_gws%efld)
+      pf_gws%efld=field_create(grid=grid, name=pf_gws%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_gws%efld, farrayPtr=pf_gws%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldFill(pf_gws%efld, dataFillScheme="const", &
+        const1=ESMF_DEFAULT_VALUE, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return
+    endif
     if (associated(pf_porosity%efld)) then
       call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_porosity exists", &
         line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
@@ -208,6 +234,20 @@ module parflow_nuopc_fields
         const1=ESMF_DEFAULT_VALUE, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return
     endif
+    if (associated(pf_smois%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_smois exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_smois%efld)
+      pf_smois%efld=field_create_layers(grid=grid, layers=nz, &
+        name=pf_smois%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_smois%efld, farrayPtr=pf_smois%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldFill(pf_smois%efld, dataFillScheme="const", &
+        const1=ESMF_DEFAULT_VALUE, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return
+    endif
     if (associated(pf_specific%efld)) then
       call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_specific exists", &
         line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
@@ -247,13 +287,14 @@ module parflow_nuopc_fields
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     if (.not. isCreated) then
       internalFB = ESMF_FieldBundleCreate(name="PF_INTERNAL", &
-        fieldList=(/ pf_flux%efld, pf_porosity%efld, pf_pressure%efld, &
-        pf_saturation%efld, pf_specific%efld, pf_zmult%efld /), rc=rc)
+        fieldList=(/ pf_flux%efld, pf_gws%efld, pf_porosity%efld, &
+        pf_pressure%efld, pf_saturation%efld, pf_smois%efld, &
+        pf_specific%efld, pf_zmult%efld /), rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     else
       call ESMF_FieldBundleAdd(internalFB, fieldList=(/ pf_flux%efld, &
-        pf_porosity%efld, pf_pressure%efld, pf_saturation%efld, &
-        pf_specific%efld, pf_zmult%efld /), rc=rc)
+        pf_gws%efld, pf_porosity%efld, pf_pressure%efld, pf_saturation%efld, &
+        pf_smois%efld, pf_specific%efld, pf_zmult%efld /), rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     endif
 
@@ -275,6 +316,11 @@ module parflow_nuopc_fields
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       deallocate(pf_flux%efld)
     endif
+    if (associated(pf_gws%efld)) then
+      call ESMF_FieldDestroy(pf_gws%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_gws%efld)
+    endif
     if (associated(pf_porosity%efld)) then
       call ESMF_FieldDestroy(pf_porosity%efld, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -289,6 +335,11 @@ module parflow_nuopc_fields
       call ESMF_FieldDestroy(pf_saturation%efld, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       deallocate(pf_saturation%efld)
+    endif
+    if (associated(pf_smois%efld)) then
+      call ESMF_FieldDestroy(pf_smois%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_smois%efld)
     endif
     if (associated(pf_specific%efld)) then
       call ESMF_FieldDestroy(pf_specific%efld, rc=rc)
@@ -812,11 +863,17 @@ module parflow_nuopc_fields
 
     ! local variables
     integer :: s_flx, s_flx1, s_flx2, s_flx3, s_flx4
+    integer :: s_gws, s_smc1, s_smc2, s_smc3, s_smc4
     type(ESMF_Field) :: fld_imp_flux
     type(ESMF_Field) :: fld_imp_flux1
     type(ESMF_Field) :: fld_imp_flux2
     type(ESMF_Field) :: fld_imp_flux3
     type(ESMF_Field) :: fld_imp_flux4
+    type(ESMF_Field) :: fld_imp_gws
+    type(ESMF_Field) :: fld_imp_smois1
+    type(ESMF_Field) :: fld_imp_smois2
+    type(ESMF_Field) :: fld_imp_smois3
+    type(ESMF_Field) :: fld_imp_smois4
     type(ESMF_Field) :: fld_imp_pcpdrp
     type(ESMF_Field) :: fld_imp_edir
     type(ESMF_Field) :: fld_imp_et
@@ -825,6 +882,11 @@ module parflow_nuopc_fields
     real(c_float), pointer :: ptr_imp_flux2(:, :)
     real(c_float), pointer :: ptr_imp_flux3(:, :)
     real(c_float), pointer :: ptr_imp_flux4(:, :)
+    real(c_float), pointer :: ptr_imp_gws(:, :)
+    real(c_float), pointer :: ptr_imp_smois1(:, :)
+    real(c_float), pointer :: ptr_imp_smois2(:, :)
+    real(c_float), pointer :: ptr_imp_smois3(:, :)
+    real(c_float), pointer :: ptr_imp_smois4(:, :)
     real(c_float), pointer :: ptr_imp_pcpdrp(:, :)
     real(c_float), pointer :: ptr_imp_edir(:, :)
     real(c_float), pointer :: ptr_imp_et(:, :, :)
@@ -932,6 +994,69 @@ module parflow_nuopc_fields
         forcType = FORCING_COMPOSITE
       endif
     endif
+
+    ! search import for ground water storage
+    call ESMF_StateGet(importState, itemSearch="GWS", &
+      itemCount=s_gws, rc=rc)
+    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    if (s_gws .gt. 0) then
+      ! query import state for pf fields
+      call ESMF_StateGet(importState, itemName="GWS", &
+        field=fld_imp_gws, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(fld_imp_gws, farrayPtr=ptr_imp_gws, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      pf_gws%ptr(:,:) = ptr_imp_gws(:,:)
+    endif
+
+    ! search import for soil moisture fraction (layers 1-4)
+    call ESMF_StateGet(importState, itemSearch="SMOIS1", &
+      itemCount=s_smc1, rc=rc)
+    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    call ESMF_StateGet(importState, itemSearch="SMOIS2", &
+      itemCount=s_smc2, rc=rc)
+    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    call ESMF_StateGet(importState, itemSearch="SMOIS3", &
+      itemCount=s_smc3, rc=rc)
+    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    call ESMF_StateGet(importState, itemSearch="SMOIS4", &
+      itemCount=s_smc4, rc=rc)
+    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    if ((s_smc1.gt.0) .and. (s_smc2.gt.0) .and. &
+        (s_smc3.gt.0) .and. (s_smc4.gt.0)) then
+      if (cplnz.ne.4) then
+        call ESMF_LogSetError(ESMF_RC_NOT_IMPL, &
+          msg="Unsupported number of coupled soil layers.", &
+          line=__LINE__,file=__FILE__,rcToReturn=rc)
+        return  ! bail out
+      endif
+      ! query import state for pf fields
+      call ESMF_StateGet(importState, itemName="SMOIS1", &
+        field=fld_imp_smois1, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(fld_imp_smois1, farrayPtr=ptr_imp_smois1, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_StateGet(importState, itemName="SMOIS2", &
+        field=fld_imp_smois2, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(fld_imp_smois2, farrayPtr=ptr_imp_smois2, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_StateGet(importState, itemName="SMOIS3", &
+        field=fld_imp_smois3, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(fld_imp_smois3, farrayPtr=ptr_imp_smois3, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_StateGet(importState, itemName="SMOIS4", &
+        field=fld_imp_smois4, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(fld_imp_smois4, farrayPtr=ptr_imp_smois4, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      pf_smois%ptr(:,1,:) = ptr_imp_smois1
+      pf_smois%ptr(:,2,:) = ptr_imp_smois2
+      pf_smois%ptr(:,3,:) = ptr_imp_smois3
+      pf_smois%ptr(:,4,:) = ptr_imp_smois4
+    endif
+
   end subroutine field_prep_import
 
   !-----------------------------------------------------------------------------

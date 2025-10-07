@@ -167,13 +167,6 @@ module parflow_nuopc
     call PF_AttributeRead(rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
-    ! prepare diagnostics folder
-    if (btest(diagnostic,16)) then
-      call ESMF_UtilIOMkDir(pathName=trim(is%wrap%output_dir), &
-        relaxedFlag=.true., rc=rc)
-      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
-    endif
-
     contains ! - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     subroutine PF_AttributeRead(rc)
@@ -447,6 +440,13 @@ module parflow_nuopc
           ESMF_LOGMSG_INFO)
       endif
       call change_directory(trim(cname),rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+    endif
+
+    ! prepare diagnostics folder
+    if (btest(diagnostic,16)) then
+      call ESMF_UtilIOMkDir(pathName=trim(is%wrap%output_dir), &
+        relaxedFlag=.true., rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     endif
 
