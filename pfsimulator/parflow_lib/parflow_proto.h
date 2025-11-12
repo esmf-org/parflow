@@ -1199,7 +1199,11 @@ void AdvanceRichards(PFModule *this_module,
 void ExportRichards(PFModule *this_module,
                     Vector ** pressure_out,  /* Output vars */
                     Vector ** porosity_out,
-                    Vector ** saturation_out
+                    Vector ** saturation_out,
+                    Vector ** sres_out,
+                    Vector ** ssat_out,
+                    Vector ** alpha_out,
+                    Vector ** n_out
                     );
 void SetupRichards(PFModule *this_module);
 
@@ -1465,6 +1469,10 @@ void cplparflowexport_(float * exp_pressure,
                        float * exp_porosity,
                        float * exp_saturation,
                        float * exp_specific,
+                       float * exp_sres,
+                       float * exp_ssat,
+                       float * exp_alpha,
+                       float * exp_n,
                        float * exp_zmult,
                        int *   num_soil_layers,
                        int *   num_cpl_layers,

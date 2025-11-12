@@ -265,6 +265,10 @@ void cplparflowexport_(float * exp_pressure,
                        float * exp_porosity,
                        float * exp_saturation,
                        float * exp_specific,
+                       float * exp_sres,
+                       float * exp_ssat,
+                       float * exp_alpha,
+                       float * exp_n,
                        float * exp_zmult,
                        int *   num_soil_layers,
                        int *   num_cpl_layers,
@@ -281,6 +285,10 @@ void cplparflowexport_(float * exp_pressure,
   Vector       *porosity_out;
   Vector       *saturation_out;
   Vector       *specific_out;
+  Vector       *sres_out;
+  Vector       *ssat_out;
+  Vector       *alpha_out;
+  Vector       *n_out;
   Vector       *zmult_out;
 
   VectorUpdateCommHandle   *handle;
@@ -288,7 +296,11 @@ void cplparflowexport_(float * exp_pressure,
   ExportRichards(amps_ThreadLocal(solver),
                  &pressure_out,
                  &porosity_out,
-                 &saturation_out);
+                 &saturation_out,
+                 &sres_out,
+                 &ssat_out,
+                 &alpha_out,
+                 &n_out);
 
   specific_out = ProblemDataSpecificStorage(problem_data);
   zmult_out = ProblemDataZmult(problem_data);
@@ -304,6 +316,14 @@ void cplparflowexport_(float * exp_pressure,
   handle = InitVectorUpdate(saturation_out, VectorUpdateAll);
   FinalizeVectorUpdate(handle);
   handle = InitVectorUpdate(specific_out, VectorUpdateAll);
+  FinalizeVectorUpdate(handle);
+  handle = InitVectorUpdate(sres_out, VectorUpdateAll);
+  FinalizeVectorUpdate(handle);
+  handle = InitVectorUpdate(ssat_out, VectorUpdateAll);
+  FinalizeVectorUpdate(handle);
+  handle = InitVectorUpdate(alpha_out, VectorUpdateAll);
+  FinalizeVectorUpdate(handle);
+  handle = InitVectorUpdate(n_out, VectorUpdateAll);
   FinalizeVectorUpdate(handle);
   handle = InitVectorUpdate(zmult_out, VectorUpdateAll);
   FinalizeVectorUpdate(handle);
@@ -327,6 +347,30 @@ void cplparflowexport_(float * exp_pressure,
          solver_mask);
 
   PF2CPL(specific_out, exp_specific, *num_soil_layers,
+         *ghost_size_i_lower, *ghost_size_j_lower,
+         *ghost_size_i_upper, *ghost_size_j_upper,
+         ProblemDataIndexOfDomainTop(problem_data),
+         solver_mask);
+
+  PF2CPL(sres_out, exp_sres, *num_soil_layers,
+         *ghost_size_i_lower, *ghost_size_j_lower,
+         *ghost_size_i_upper, *ghost_size_j_upper,
+         ProblemDataIndexOfDomainTop(problem_data),
+         solver_mask);
+
+  PF2CPL(ssat_out, exp_ssat, *num_soil_layers,
+         *ghost_size_i_lower, *ghost_size_j_lower,
+         *ghost_size_i_upper, *ghost_size_j_upper,
+         ProblemDataIndexOfDomainTop(problem_data),
+         solver_mask);
+
+  PF2CPL(alpha_out, exp_alpha, *num_soil_layers,
+         *ghost_size_i_lower, *ghost_size_j_lower,
+         *ghost_size_i_upper, *ghost_size_j_upper,
+         ProblemDataIndexOfDomainTop(problem_data),
+         solver_mask);
+
+  PF2CPL(n_out, exp_n, *num_soil_layers,
          *ghost_size_i_lower, *ghost_size_j_lower,
          *ghost_size_i_upper, *ghost_size_j_upper,
          ProblemDataIndexOfDomainTop(problem_data),

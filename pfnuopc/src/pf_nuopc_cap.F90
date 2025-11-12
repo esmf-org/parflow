@@ -942,14 +942,15 @@ module parflow_nuopc
       ! call parflow c interface
       ! field dimensions (i,num_soil_layers,j)
       ! void cplparflowexport_(float *exp_pressure, float *exp_porosity,
-      !   float *exp_saturation, float *exp_specific, float *exp_zmulit,
+      !   float *exp_saturation, float *exp_specific, float *exp_sres,
+      !   float *exp_ssat, float *exp_alpha, float *exp_n, float *exp_zmult,
       !   int *num_soil_layers, int *num_cpl_layers
       !   int *ghost_size_i_lower, int *ghost_size_j_lower,
       !   int *ghost_size_i_upper, int *ghost_size_j_upper,
       !   ierror)
-      call cplparflowexport(pf_pressure%ptr, &
-        pf_porosity%ptr, pf_saturation%ptr, &
-        pf_specific%ptr, pf_zmult%ptr, &
+      call cplparflowexport(pf_pressure%ptr, pf_porosity%ptr, &
+        pf_saturation%ptr, pf_specific%ptr, pf_sres%ptr, &
+        pf_ssat%ptr, pf_alpha%ptr, pf_n%ptr, pf_zmult%ptr, &
         is%wrap%nz, is%wrap%cplnz, &
         totalLWidth(1,1), totalLWidth(2,1), &
         totalUWidth(1,1), totalUWidth(2,1), &

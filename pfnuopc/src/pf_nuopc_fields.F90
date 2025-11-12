@@ -40,6 +40,14 @@ module parflow_nuopc_fields
     pf_fld_3d_type(fname="PF_SMOIS     ", units="-")
   type(pf_fld_3d_type) :: pf_specific = &
     pf_fld_3d_type(fname="PF_SPECIFIC  ", units="m3")
+  type(pf_fld_3d_type) :: pf_sres = &
+    pf_fld_3d_type(fname="PF_SRES      ", units="-")
+  type(pf_fld_3d_type) :: pf_ssat = &
+    pf_fld_3d_type(fname="PF_SSAT      ", units="-")
+  type(pf_fld_3d_type) :: pf_alpha = &
+    pf_fld_3d_type(fname="PF_ALPHA     ", units="")
+  type(pf_fld_3d_type) :: pf_n = &
+    pf_fld_3d_type(fname="PF_N         ", units="-")
   type(pf_fld_3d_type) :: pf_zmult = &
     pf_fld_3d_type(fname="PF_ZMULT     ", units="m")
 
@@ -112,6 +120,10 @@ module parflow_nuopc_fields
   public pf_saturation
   public pf_smois
   public pf_specific
+  public pf_sres
+  public pf_ssat
+  public pf_alpha
+  public pf_n
   public pf_zmult
   public pf_nuopc_fld_list
   public field_init_internal
@@ -262,6 +274,62 @@ module parflow_nuopc_fields
         const1=ESMF_DEFAULT_VALUE, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return
     endif
+    if (associated(pf_sres%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_sres exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_sres%efld)
+      pf_sres%efld=field_create_layers(grid=grid, layers=nz, &
+        name=pf_sres%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_sres%efld, farrayPtr=pf_sres%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldFill(pf_sres%efld, dataFillScheme="const", &
+        const1=ESMF_DEFAULT_VALUE, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return
+    endif
+    if (associated(pf_ssat%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_ssat exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_ssat%efld)
+      pf_ssat%efld=field_create_layers(grid=grid, layers=nz, &
+        name=pf_ssat%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_ssat%efld, farrayPtr=pf_ssat%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldFill(pf_ssat%efld, dataFillScheme="const", &
+        const1=ESMF_DEFAULT_VALUE, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return
+    endif
+    if (associated(pf_alpha%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_alpha exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_alpha%efld)
+      pf_alpha%efld=field_create_layers(grid=grid, layers=nz, &
+        name=pf_alpha%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_alpha%efld, farrayPtr=pf_alpha%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldFill(pf_alpha%efld, dataFillScheme="const", &
+        const1=ESMF_DEFAULT_VALUE, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return
+    endif
+    if (associated(pf_n%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_n exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_n%efld)
+      pf_n%efld=field_create_layers(grid=grid, layers=nz, &
+        name=pf_n%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_n%efld, farrayPtr=pf_n%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldFill(pf_n%efld, dataFillScheme="const", &
+        const1=ESMF_DEFAULT_VALUE, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return
+    endif
     if (associated(pf_zmult%efld)) then
       call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_zmult exists", &
         line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
@@ -289,12 +357,14 @@ module parflow_nuopc_fields
       internalFB = ESMF_FieldBundleCreate(name="PF_INTERNAL", &
         fieldList=(/ pf_flux%efld, pf_gws%efld, pf_porosity%efld, &
         pf_pressure%efld, pf_saturation%efld, pf_smois%efld, &
-        pf_specific%efld, pf_zmult%efld /), rc=rc)
+        pf_specific%efld, pf_sres%efld, pf_ssat%efld, &
+        pf_alpha%efld, pf_n%efld, pf_zmult%efld /), rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     else
       call ESMF_FieldBundleAdd(internalFB, fieldList=(/ pf_flux%efld, &
         pf_gws%efld, pf_porosity%efld, pf_pressure%efld, pf_saturation%efld, &
-        pf_smois%efld, pf_specific%efld, pf_zmult%efld /), rc=rc)
+        pf_smois%efld, pf_specific%efld, pf_sres%efld, pf_ssat%efld, &
+        pf_alpha%efld, pf_n%efld, pf_zmult%efld /), rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     endif
 
@@ -345,6 +415,27 @@ module parflow_nuopc_fields
       call ESMF_FieldDestroy(pf_specific%efld, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       deallocate(pf_specific%efld)
+    endif
+
+    if (associated(pf_sres%efld)) then
+      call ESMF_FieldDestroy(pf_sres%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_sres%efld)
+    endif
+    if (associated(pf_ssat%efld)) then
+      call ESMF_FieldDestroy(pf_ssat%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_ssat%efld)
+    endif
+    if (associated(pf_alpha%efld)) then
+      call ESMF_FieldDestroy(pf_alpha%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_alpha%efld)
+    endif
+    if (associated(pf_n%efld)) then
+      call ESMF_FieldDestroy(pf_n%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_n%efld)
     endif
     if (associated(pf_zmult%efld)) then
       call ESMF_FieldDestroy(pf_zmult%efld, rc=rc)

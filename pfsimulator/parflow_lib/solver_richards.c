@@ -4358,17 +4358,48 @@ void
 ExportRichards(PFModule * this_module,
                Vector **  pressure_out, /* Output vars */
                Vector **  porosity_out,
-               Vector **  saturation_out)
+               Vector **  saturation_out,
+               Vector **  sres_out,
+               Vector **  ssat_out,
+               Vector **  alpha_out,
+               Vector **  n_out)
 {
   InstanceXtra *instance_xtra =
     (InstanceXtra*)PFModuleInstanceXtra(this_module);
   ProblemData *problem_data = (instance_xtra->problem_data);
+  Grid *grid = (instance_xtra->grid);
 
   Vector *porosity = ProblemDataPorosity(problem_data);
+  Vector *sres = NewVectorType(grid, 1, 1, vector_cell_centered);
+  Vector *ssat = NewVectorType(grid, 1, 1, vector_cell_centered);
+  Vector *alpha = NewVectorType(grid, 1, 1, vector_cell_centered);
+  Vector *n = NewVectorType(grid, 1, 1, vector_cell_centered);
+
+  char filename[PATH_MAX];
+
+  sprintf(filename, "%s.sres.pfb", GlobalsOutFileName);
+  InitVectorAll(sres, 0.0);
+  ReadPFBinary(filename, sres);
+
+  sprintf(filename, "%s.ssat.pfb", GlobalsOutFileName);
+  InitVectorAll(ssat, 0.0);
+  ReadPFBinary(filename, ssat);
+
+  sprintf(filename, "%s.alpha.pfb", GlobalsOutFileName);
+  InitVectorAll(alpha, 0.0);
+  ReadPFBinary(filename, alpha);
+
+  sprintf(filename, "%s.n.pfb", GlobalsOutFileName);
+  InitVectorAll(n, 0.0);
+  ReadPFBinary(filename, n);
 
   *pressure_out = instance_xtra->pressure;
   *porosity_out = porosity;
   *saturation_out = instance_xtra->saturation;
+  *sres_out = sres;
+  *ssat_out = ssat;
+  *alpha_out = alpha;
+  *n_out = n;
 }
 
 
