@@ -112,6 +112,7 @@ module parflow_nuopc_fields
       "SH2O4      ", "-        ", .FALSE., .FALSE.,  .TRUE.) /)
 
   integer(ESMF_KIND_I4), pointer :: fld_mask(:,:) => null()
+  real(ESMF_KIND_R4), pointer :: fld_m(:,:,:) => null()
 
   public pf_flux
   public pf_gws
@@ -350,6 +351,11 @@ module parflow_nuopc_fields
       farrayPtr=fld_mask, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return
 
+    ! allocate m
+    allocate(fld_m(ubound(pf_pressure%ptr,1), &
+                   ubound(pf_pressure%ptr,2), &
+                   ubound(pf_pressure%ptr,3)))
+
     ! add fields to internal field bundle
     isCreated = ESMF_FieldBundleIsCreated(internalFB, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -442,6 +448,8 @@ module parflow_nuopc_fields
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       deallocate(pf_zmult%efld)
     endif
+
+    deallocate(fld_m)
 
     ! destroy internal field bundle
     isCreated = ESMF_FieldBundleIsCreated(internalFB, rc=rc)
@@ -1147,6 +1155,17 @@ module parflow_nuopc_fields
       pf_smois%ptr(:,3,:) = ptr_imp_smois3
       pf_smois%ptr(:,4,:) = ptr_imp_smois4
     endif
+
+    ! calculate pressure for coupled layers
+    do i=1, cplnz
+      where (pf_smois%ptr(:,i,:) < pf_ssat%ptr(:,i,:))
+        fld_m(:,i,:) = 1-(1/pf_n%ptr(:,i,:))
+        pf_pressure%ptr(:,i,:) = -(1/pf_alpha%ptr(:,i,:)) * &
+          ( ( ( ( (pf_smois%ptr(:,i,:)-pf_sres%ptr(:,i,:)) / &
+                  (pf_ssat%ptr(:,i,:)-pf_sres%ptr(:,i,:)) ) &
+                ** (-1/fld_m(:,i,:)) ) -1.0 ) ** (1/pf_n%ptr(:,i,:)) )
+      endwhere
+    enddo
 
   end subroutine field_prep_import
 
