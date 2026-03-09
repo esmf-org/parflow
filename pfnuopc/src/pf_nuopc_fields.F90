@@ -11,6 +11,13 @@ module parflow_nuopc_fields
 
   private
 
+  type pf_fld_mk_type
+    character(len=64)              :: fname      = "dummy" ! state name
+    character(len=64)              :: units      = "-"     ! units
+    type(ESMF_Field), pointer      :: efld       => null()
+    integer(ESMF_KIND_I4), pointer :: ptr(:,:) => null()
+  endtype pf_fld_mk_type
+
   type pf_fld_2d_type
     character(len=64)           :: fname      = "dummy" ! state name
     character(len=64)           :: units      = "-"     ! units
@@ -50,6 +57,12 @@ module parflow_nuopc_fields
     pf_fld_3d_type(fname="PF_N         ", units="-")
   type(pf_fld_3d_type) :: pf_zmult = &
     pf_fld_3d_type(fname="PF_ZMULT     ", units="m")
+  type(pf_fld_3d_type) :: pf_dz = &
+    pf_fld_3d_type(fname="PF_DZ        ", units="m")
+  type(pf_fld_2d_type) :: pf_zwt = &
+    pf_fld_2d_type(fname="PF_ZWT       ", units="m")
+  type(pf_fld_mk_type) :: pf_mask = &
+    pf_fld_mk_type(fname="PF_MASK      ", units="-")
 
   type pf_nuopc_fld_type
     sequence
@@ -126,6 +139,9 @@ module parflow_nuopc_fields
   public pf_alpha
   public pf_n
   public pf_zmult
+  public pf_dz
+  public pf_zwt
+  public pf_mask
   public pf_nuopc_fld_list
   public field_init_internal
   public field_fin_internal
@@ -134,6 +150,7 @@ module parflow_nuopc_fields
   public field_advertise_log
   public field_realize_log
   public field_fill_state
+  public field_init_zwt
   public field_prep_import
   public field_prep_export
 
@@ -345,11 +362,49 @@ module parflow_nuopc_fields
         const1=ESMF_DEFAULT_VALUE, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return
     endif
+    if (associated(pf_dz%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_dz exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_dz%efld)
+      pf_dz%efld=field_create_layers(grid=grid, layers=nz, &
+        name=pf_dz%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_dz%efld, farrayPtr=pf_dz%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldFill(pf_dz%efld, dataFillScheme="const", &
+        const1=ESMF_DEFAULT_VALUE, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return
+    endif
+    if (associated(pf_zwt%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_zwt exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_zwt%efld)
+      pf_zwt%efld=field_create(grid=grid, name=pf_zwt%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_zwt%efld, farrayPtr=pf_zwt%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldFill(pf_zwt%efld, dataFillScheme="const", &
+        const1=ESMF_DEFAULT_VALUE, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return
+    endif
 
     ! store mask
     call ESMF_GridGetItem(grid, itemflag=ESMF_GRIDITEM_MASK, &
       farrayPtr=fld_mask, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return
+    if (associated(pf_mask%efld)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_CREATE, msg="pf_mask exists", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc); return  ! bail out
+    else
+      allocate(pf_mask%efld)
+      pf_mask%efld=field_create_mk(grid=grid, name=pf_mask%fname, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      call ESMF_FieldGet(pf_mask%efld, farrayPtr=pf_mask%ptr, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      pf_mask%ptr = fld_mask
+    endif
 
     ! allocate m
     allocate(fld_m(ubound(pf_pressure%ptr,1), &
@@ -364,13 +419,17 @@ module parflow_nuopc_fields
         fieldList=(/ pf_flux%efld, pf_gws%efld, pf_porosity%efld, &
         pf_pressure%efld, pf_saturation%efld, pf_smois%efld, &
         pf_specific%efld, pf_sres%efld, pf_ssat%efld, &
-        pf_alpha%efld, pf_n%efld, pf_zmult%efld /), rc=rc)
+        pf_alpha%efld, pf_n%efld, pf_zmult%efld, pf_dz%efld, &
+        pf_zwt%efld, pf_mask%efld /), &
+        rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     else
       call ESMF_FieldBundleAdd(internalFB, fieldList=(/ pf_flux%efld, &
         pf_gws%efld, pf_porosity%efld, pf_pressure%efld, pf_saturation%efld, &
         pf_smois%efld, pf_specific%efld, pf_sres%efld, pf_ssat%efld, &
-        pf_alpha%efld, pf_n%efld, pf_zmult%efld /), rc=rc)
+        pf_alpha%efld, pf_n%efld, pf_zmult%efld, pf_dz%efld, &
+        pf_zwt%efld, pf_mask%efld/), &
+        rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     endif
 
@@ -447,6 +506,21 @@ module parflow_nuopc_fields
       call ESMF_FieldDestroy(pf_zmult%efld, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       deallocate(pf_zmult%efld)
+    endif
+    if (associated(pf_dz%efld)) then
+      call ESMF_FieldDestroy(pf_dz%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_dz%efld)
+    endif
+    if (associated(pf_zwt%efld)) then
+      call ESMF_FieldDestroy(pf_zwt%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_zwt%efld)
+    endif
+    if (associated(pf_mask%efld)) then
+      call ESMF_FieldDestroy(pf_mask%efld, rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      deallocate(pf_mask%efld)
     endif
 
     deallocate(fld_m)
@@ -570,6 +644,24 @@ module parflow_nuopc_fields
 
     field = ESMF_FieldCreate(grid=grid, &
       typekind=ESMF_TYPEKIND_FIELD, &
+      name=name, rc=rc)
+    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+  end function
+
+  !-----------------------------------------------------------------------------
+
+  function field_create_mk(grid, name, rc) result(field)
+    type(ESMF_Grid), intent(in)         :: grid
+    character(*), intent(in)            :: name
+    integer, intent(out)                :: rc
+    ! return value
+    type(ESMF_Field)                    :: field
+    ! local variables
+
+    rc = ESMF_SUCCESS
+
+    field = ESMF_FieldCreate(grid=grid, &
+      typekind=ESMF_TYPEKIND_I4, &
       name=name, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
   end function
@@ -952,6 +1044,47 @@ module parflow_nuopc_fields
 
   !-----------------------------------------------------------------------------
 
+  subroutine field_init_zwt(rc)
+    integer, intent(out) :: rc
+
+    ! local variables
+    logical :: found
+    integer :: i, j, k
+    integer :: sat_idx
+
+    rc = ESMF_SUCCESS
+
+    pf_zwt%ptr(:,:) = 0.0
+
+    do i = lbound(pf_zwt%ptr,1), ubound(pf_zwt%ptr,1)
+    do j = lbound(pf_zwt%ptr,2), ubound(pf_zwt%ptr,2)
+      if (pf_mask%ptr(i,j) == 1) then
+        found = .false.
+        do k = lbound(pf_pressure%ptr,2), ubound(pf_pressure%ptr,2)
+          if (pf_pressure%ptr(i,k,j) >= 0.0) then
+            sat_idx = k
+            found = .true.
+            exit
+          end if
+        end do
+        if (found) then
+           if (sat_idx > 2) then
+             pf_zwt%ptr(i,j) = sum(pf_dz%ptr(i,1:sat_idx-1,j))
+           endif
+           pf_zwt%ptr(i,j) = pf_zwt%ptr(i,j) + (pf_dz%ptr(i,sat_idx,j) / 2.0)
+        else
+           pf_zwt%ptr(i,j) = sum(pf_dz%ptr(i,:,j))
+        end if
+      else
+        pf_zwt%ptr(i,j) = 0.0_ESMF_KIND_R8
+      end if
+    end do
+    end do
+
+  end subroutine field_init_zwt
+
+  !-----------------------------------------------------------------------------
+
   subroutine field_prep_import(importState, nz, cplnz, cpldz, forcType, rc)
     type(ESMF_State), intent(in)    :: importState
     integer, intent(in)             :: nz
@@ -1167,6 +1300,11 @@ module parflow_nuopc_fields
       endwhere
     enddo
 
+    ! calculate pressure for non-coupled layers
+    do i=cplnz+1, nz
+
+    enddo
+
   end subroutine field_prep_import
 
   !-----------------------------------------------------------------------------
@@ -1212,6 +1350,10 @@ module parflow_nuopc_fields
     endif
     if(.not.associated(pf_zmult%ptr)) then
       call ESMF_LogSetError(ESMF_RC_OBJ_INIT, msg="pf_zmult missing", &
+        line=__LINE__,file=__FILE__,rcToReturn=rc);  return  ! bail out
+    endif
+    if(.not.associated(pf_dz%ptr)) then
+      call ESMF_LogSetError(ESMF_RC_OBJ_INIT, msg="pf_dz missing", &
         line=__LINE__,file=__FILE__,rcToReturn=rc);  return  ! bail out
     endif
 
@@ -1275,7 +1417,7 @@ module parflow_nuopc_fields
                                          (pf_pressure%ptr(i,cplnz+1:nz,j) * &
                                           pf_saturation%ptr(i,cplnz+1:nz,j) * &
                                           pf_specific%ptr(i,cplnz+1:nz,j))) * &
-                                        pf_zmult%ptr(i,cplnz+1:nz,j)) * &
+                                        pf_dz%ptr(i,cplnz+1:nz,j)) * &
                                     real(1000,ESMF_KIND_R4)
                 else
                   ptr_export2d(i,j)=ESMF_DEFAULT_VALUE

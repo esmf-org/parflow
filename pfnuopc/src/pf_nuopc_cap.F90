@@ -41,6 +41,7 @@ module parflow_nuopc
     type(geom_src_flag)    :: geom_src           = GEOM_PROVIDE
     type(grid_coord_flag)  :: ctype              = GRD_COORD_CLMVEGTF
     character(len=64)      :: coord_filename     = "none"
+    integer                :: sg                 = 0
     integer                :: nx                 = 0
     integer                :: ny                 = 0
     integer                :: nz                 = 0
@@ -284,8 +285,10 @@ module parflow_nuopc
 
       ! number of soil layers
       call ESMF_AttributeGet(gcomp, name="number_of_soil_layers", &
-        value=is%wrap%cplnz, defaultvalue=4, &
+        value=attval, &
         convention="NUOPC", purpose="Instance", rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      is%wrap%cplnz = ESMF_UtilString2Real(attval, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
       ! thickness of soil layers
@@ -295,8 +298,9 @@ module parflow_nuopc
         line=__LINE__, file=__FILE__, rcToReturn=rc)) return  ! bail out
       is%wrap%cpldz = 0.0
       call ESMF_AttributeGet(gcomp, name="thickness_of_soil_layers", &
-        value=attval, defaultvalue="0.1,0.3,0.6,1.0,1.0,1.0,1.0,1.0", &
+        value=attval, &
         convention="NUOPC", purpose="Instance", rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       oldidx=1
       do i=1, is%wrap%cplnz
         attval=adjustl(attval(oldidx:))
@@ -516,6 +520,8 @@ module parflow_nuopc
     character(ESMF_MAXSTR)         :: logMsg
     integer                        :: pfsubgridcnt
     integer                        :: pfnumprocs
+    integer(c_int)                 :: totalLWidth(2,1)
+    integer(c_int)                 :: totalUWidth(2,1)
     integer                        :: ierr
 
     rc = ESMF_SUCCESS
@@ -608,6 +614,7 @@ module parflow_nuopc
         line=__LINE__, file=__FILE__, rcToReturn=rc)
       return  ! bail out
     endif
+    is%wrap%sg = 0
 
     pfdistgrid = distgrid_create(vm, is%wrap%nx, is%wrap%ny, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -646,6 +653,28 @@ module parflow_nuopc
       fillValue=ESMF_DEFAULT_VALUE, &
       rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+
+    totalLWidth = 0
+    totalUWidth = 0
+
+    ! call parflow c interface
+    ! field dimensions (i,num_soil_layers,j)
+    ! void cplparflowdz_(int *sg, float *exp_zmult, float *exp_dz,
+    !   int *num_soil_layers,
+    !   int *ghost_size_i_lower, int *ghost_size_j_lower,
+    !   int *ghost_size_i_upper, int *ghost_size_j_upper,
+    !   ierror)
+    call cplparflowdz(is%wrap%sg, pf_zmult%ptr, pf_dz%ptr, &
+      is%wrap%nz, &
+      totalLWidth(1,1), totalLWidth(2,1), &
+      totalUWidth(1,1), totalUWidth(2,1), &
+      ierr)
+    if (ierr .ne. 0) then
+      call ESMF_LogSetError(ESMF_RC_NOT_IMPL, &
+        msg="cplparflowdz failed.", &
+        line=__LINE__, file=__FILE__, rcToReturn=rc)
+      return
+    endif
 
     if (btest(verbosity,16)) then
       call field_realize_log(pf_nuopc_fld_list, trim(cname), rc=rc)
@@ -939,19 +968,17 @@ module parflow_nuopc
           '  Calling cplparflowexport'
         call ESMF_LogWrite(trim(logMsg),ESMF_LOGMSG_INFO)
       endif
-      ! call parflow c interface
-      ! field dimensions (i,num_soil_layers,j)
       ! void cplparflowexport_(float *exp_pressure, float *exp_porosity,
       !   float *exp_saturation, float *exp_specific, float *exp_sres,
-      !   float *exp_ssat, float *exp_alpha, float *exp_n, float *exp_zmult,
-      !   int *num_soil_layers, int *num_cpl_layers
+      !   float *exp_ssat, float *exp_alpha, float *exp_n,
+      !   int *num_soil_layers,
       !   int *ghost_size_i_lower, int *ghost_size_j_lower,
       !   int *ghost_size_i_upper, int *ghost_size_j_upper,
       !   ierror)
       call cplparflowexport(pf_pressure%ptr, pf_porosity%ptr, &
         pf_saturation%ptr, pf_specific%ptr, pf_sres%ptr, &
-        pf_ssat%ptr, pf_alpha%ptr, pf_n%ptr, pf_zmult%ptr, &
-        is%wrap%nz, is%wrap%cplnz, &
+        pf_ssat%ptr, pf_alpha%ptr, pf_n%ptr, &
+        is%wrap%nz, &
         totalLWidth(1,1), totalLWidth(2,1), &
         totalUWidth(1,1), totalUWidth(2,1), &
         ierr)
@@ -961,7 +988,6 @@ module parflow_nuopc
           line=__LINE__, file=__FILE__, rcToReturn=rc)
         return
       endif
-
       call field_prep_export(exportState, is%wrap%nz, is%wrap%cplnz, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       call NUOPC_SetTimestamp(exportState, time=currTime, rc=rc)
@@ -979,6 +1005,16 @@ module parflow_nuopc
     ! set InitializeDataComplete Attribute to "true", indicating to the
     ! generic code that all inter-model data dependencies are satisfied
     if (importInit .and. exportInit) then
+      call field_init_zwt(rc=rc)
+      if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      ! write out internal fields
+      if (btest(diagnostic,16)) then
+        call ESMF_FieldBundleWrite(is%wrap%pf_fields, &
+          fileName=trim(is%wrap%output_dir)//"/diagnostic_"//trim(cname)// &
+          "_DataInitialize.nc", &
+          overwrite=.true., status=ESMF_FILESTATUS_REPLACE, timeslice=1, rc=rc)
+        if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+      endif
       call NUOPC_CompAttributeSet(gcomp, name="InitializeDataComplete", value="true", rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     endif
@@ -1142,10 +1178,6 @@ module parflow_nuopc
       call ESMF_LogSetError(ESMF_RC_OBJ_INIT, msg="pf_specific missing", &
         line=__LINE__,file=__FILE__,rcToReturn=rc);  return  ! bail out
     endif
-    if(.not.associated(pf_zmult%ptr)) then
-      call ESMF_LogSetError(ESMF_RC_OBJ_INIT, msg="pf_zmult missing", &
-        line=__LINE__,file=__FILE__,rcToReturn=rc);  return  ! bail out
-    endif
 
     ! prepare import data
     call field_prep_import(importState, is%wrap%nz, is%wrap%cplnz, &
@@ -1209,7 +1241,7 @@ module parflow_nuopc
     call cplparflowadvance(pf_time, pf_dt, &
       pf_flux%ptr,     pf_pressure%ptr, &
       pf_porosity%ptr, pf_saturation%ptr, &
-      pf_specific%ptr, pf_zmult%ptr, &
+      pf_specific%ptr, &
       is%wrap%nz, is%wrap%cplnz, &
       totalLWidth(1,1), totalLWidth(2,1), &
       totalUWidth(1,1), totalUWidth(2,1), &

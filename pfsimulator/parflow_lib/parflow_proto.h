@@ -1456,7 +1456,6 @@ void cplparflowadvance_(double * current_time,
                         float *  exp_porosity,
                         float *  exp_saturation,
                         float *  exp_specific,
-                        float *  exp_zmult,
                         int *    num_soil_layers,
                         int *    num_cpl_layers,
                         int *    ghost_size_i_lower, /* Number of ghost cells */
@@ -1464,6 +1463,16 @@ void cplparflowadvance_(double * current_time,
                         int *    ghost_size_i_upper,
                         int *    ghost_size_j_upper,
                         int *    ierror);
+
+void cplparflowdz_(int * sg,
+                   float * exp_zmult,
+                   float * exp_dz,
+                   int *   num_soil_layers,
+                   int *   ghost_size_i_lower, /* Number of ghost cells */
+                   int *   ghost_size_j_lower,
+                   int *   ghost_size_i_upper,
+                   int *   ghost_size_j_upper,
+                   int *   ierror);
 
 void cplparflowexport_(float * exp_pressure,
                        float * exp_porosity,
@@ -1473,9 +1482,7 @@ void cplparflowexport_(float * exp_pressure,
                        float * exp_ssat,
                        float * exp_alpha,
                        float * exp_n,
-                       float * exp_zmult,
                        int *   num_soil_layers,
-                       int *   num_cpl_layers,
                        int *   ghost_size_i_lower,  /* Number of ghost cells */
                        int *   ghost_size_j_lower,
                        int *   ghost_size_i_upper,
@@ -1496,6 +1503,17 @@ void CPL2PF(float *  imp_array,
 void PF2CPL(Vector * pf_vector,
             float *  exp_array,
             int      exp_nz,
+            int      ghost_size_i_lower, /* Number of ghost cells */
+            int      ghost_size_j_lower,
+            int      ghost_size_i_upper,
+            int      ghost_size_j_upper,
+            Vector * top,
+            Vector * mask);
+
+void PF2CPL_MULT(Vector * pf_vector,
+            float *  exp_array,
+            int      exp_nz,
+            float    scalar,
             int      ghost_size_i_lower, /* Number of ghost cells */
             int      ghost_size_j_lower,
             int      ghost_size_i_upper,

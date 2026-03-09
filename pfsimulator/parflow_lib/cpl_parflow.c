@@ -136,7 +136,6 @@ void cplparflowadvance_(double * current_time,
                         float *  exp_porosity,
                         float *  exp_saturation,
                         float *  exp_specific,
-                        float *  exp_zmult,
                         int *    num_soil_layers,
                         int *    num_cpl_layers,
                         int *    ghost_size_i_lower,
@@ -154,7 +153,6 @@ void cplparflowadvance_(double * current_time,
   Vector       *porosity_out;
   Vector       *saturation_out;
   Vector       *specific_out;
-  Vector       *zmult_out;
 
   VectorUpdateCommHandle   *handle;
 
@@ -208,7 +206,6 @@ void cplparflowadvance_(double * current_time,
                   &saturation_out);
 
   specific_out = ProblemDataSpecificStorage(problem_data);
-  zmult_out = ProblemDataZmult(problem_data);
 
   PFModuleFreeInstance(time_step_control_instance);
   PFModuleFreeModule(time_step_control);
@@ -224,8 +221,6 @@ void cplparflowadvance_(double * current_time,
   handle = InitVectorUpdate(saturation_out, VectorUpdateAll);
   FinalizeVectorUpdate(handle);
   handle = InitVectorUpdate(specific_out, VectorUpdateAll);
-  FinalizeVectorUpdate(handle);
-  handle = InitVectorUpdate(zmult_out, VectorUpdateAll);
   FinalizeVectorUpdate(handle);
 
   PF2CPL(pressure_out, exp_pressure, *num_soil_layers,
@@ -252,7 +247,59 @@ void cplparflowadvance_(double * current_time,
          ProblemDataIndexOfDomainTop(problem_data),
          solver_mask);
 
+  *ierror = 0;
+}
+
+void cplparflowdz_(int * sg,
+                   float * exp_zmult,
+                   float * exp_dz,
+                   int *   num_soil_layers,
+                   int *   ghost_size_i_lower,
+                   int *   ghost_size_j_lower,
+                   int *   ghost_size_i_upper,
+                   int *   ghost_size_j_upper,
+                   int *   ierror)
+{
+  ProblemData *problem_data = GetProblemDataRichards(amps_ThreadLocal(solver));
+  Grid *grid = GetGrid2DRichards(amps_ThreadLocal(solver));
+  Vector *solver_mask = GetMaskRichards(amps_ThreadLocal(solver));
+
+  Vector       *zmult_out;
+
+  VectorUpdateCommHandle   *handle;
+
+  int subgridcount;
+
+  zmult_out = ProblemDataZmult(problem_data);
+
+  /* TODO: SGS
+   * Are these needed here?  Decided to put them in just be safe but
+   * they could be unnecessary.
+   */
+  handle = InitVectorUpdate(zmult_out, VectorUpdateAll);
+  FinalizeVectorUpdate(handle);
+
   PF2CPL(zmult_out, exp_zmult, *num_soil_layers,
+         *ghost_size_i_lower, *ghost_size_j_lower,
+         *ghost_size_i_upper, *ghost_size_j_upper,
+         ProblemDataIndexOfDomainTop(problem_data),
+         solver_mask);
+
+
+  float dz;
+  subgridcount = SubgridArraySize(GridSubgrids(grid));
+  if (*sg < 0 || *sg > (subgridcount - 1))
+  {
+    *ierror = 22;
+    return;
+  }
+  else
+  {
+    Subgrid *subgrid = GridSubgrid(grid, *sg);
+    dz = SubgridDZ(subgrid);
+  }
+
+  PF2CPL_MULT(zmult_out, exp_dz, *num_soil_layers, dz,
          *ghost_size_i_lower, *ghost_size_j_lower,
          *ghost_size_i_upper, *ghost_size_j_upper,
          ProblemDataIndexOfDomainTop(problem_data),
@@ -269,9 +316,7 @@ void cplparflowexport_(float * exp_pressure,
                        float * exp_ssat,
                        float * exp_alpha,
                        float * exp_n,
-                       float * exp_zmult,
                        int *   num_soil_layers,
-                       int *   num_cpl_layers,
                        int *   ghost_size_i_lower,
                        int *   ghost_size_j_lower,
                        int *   ghost_size_i_upper,
@@ -289,7 +334,6 @@ void cplparflowexport_(float * exp_pressure,
   Vector       *ssat_out;
   Vector       *alpha_out;
   Vector       *n_out;
-  Vector       *zmult_out;
 
   VectorUpdateCommHandle   *handle;
 
@@ -303,7 +347,7 @@ void cplparflowexport_(float * exp_pressure,
                  &n_out);
 
   specific_out = ProblemDataSpecificStorage(problem_data);
-  zmult_out = ProblemDataZmult(problem_data);
+
 
   /* TODO: SGS
    * Are these needed here?  Decided to put them in just be safe but
@@ -324,8 +368,6 @@ void cplparflowexport_(float * exp_pressure,
   handle = InitVectorUpdate(alpha_out, VectorUpdateAll);
   FinalizeVectorUpdate(handle);
   handle = InitVectorUpdate(n_out, VectorUpdateAll);
-  FinalizeVectorUpdate(handle);
-  handle = InitVectorUpdate(zmult_out, VectorUpdateAll);
   FinalizeVectorUpdate(handle);
 
   PF2CPL(pressure_out, exp_pressure, *num_soil_layers,
@@ -371,12 +413,6 @@ void cplparflowexport_(float * exp_pressure,
          solver_mask);
 
   PF2CPL(n_out, exp_n, *num_soil_layers,
-         *ghost_size_i_lower, *ghost_size_j_lower,
-         *ghost_size_i_upper, *ghost_size_j_upper,
-         ProblemDataIndexOfDomainTop(problem_data),
-         solver_mask);
-
-  PF2CPL(zmult_out, exp_zmult, *num_soil_layers,
          *ghost_size_i_lower, *ghost_size_j_lower,
          *ghost_size_i_upper, *ghost_size_j_upper,
          ProblemDataIndexOfDomainTop(problem_data),
@@ -521,6 +557,89 @@ void PF2CPL(
                             ((exp_nz - (k - iz) - 1) * exp_nx) +
                             ((j - iy + ghost_size_j_lower) * (exp_nx * exp_nz));
             exp_array[exp_index] = (float)(subvector_data[pf_index]);
+          }
+        }
+        else
+        {
+          // fill missing export
+          for (k = 0; k < exp_nz; k++)
+          {
+            int exp_index = (i - ix + ghost_size_i_lower) +
+                            ((exp_nz - k - 1) * exp_nx) +
+                            ((j - iy + ghost_size_j_lower) * (exp_nx * exp_nz));
+            exp_array[exp_index] = (float)(-1.0e34);
+          }
+        }
+      }
+    }
+  }
+}
+
+/*
+ * Copy and data from a PF vector to an export array and multiply by scalar
+ */
+void PF2CPL_MULT(
+            Vector * pf_vector,
+            float *  exp_array, /* export array */
+            int      exp_nz,             /* layers of export array, X, Y are
+                                          * assumed to be the same as PF vector
+                                          * subgrid */
+            float    scalar,
+            int      ghost_size_i_lower, /* Number of ghost cells */
+            int      ghost_size_j_lower,
+            int      ghost_size_i_upper,
+            int      ghost_size_j_upper,
+            Vector * top,
+            Vector * mask)
+{
+  Grid       *grid = VectorGrid(pf_vector);
+  int sg;
+
+  (void)ghost_size_j_upper;
+
+  ForSubgridI(sg, GridSubgrids(grid))
+  {
+    Subgrid *subgrid = GridSubgrid(grid, sg);
+
+    int ix = SubgridIX(subgrid);
+    int iy = SubgridIY(subgrid);
+
+    int nx = SubgridNX(subgrid);
+    int ny = SubgridNY(subgrid);
+
+    int exp_nx = nx + ghost_size_i_lower + ghost_size_i_upper;
+
+    Subvector *subvector = VectorSubvector(pf_vector, sg);
+    double *subvector_data = SubvectorData(subvector);
+
+    Subvector *top_subvector = VectorSubvector(top, sg);
+    double    *top_data = SubvectorData(top_subvector);
+
+    Subvector *mask_subvector = VectorSubvector(mask, sg);
+    double    *mask_data = SubvectorData(mask_subvector);
+
+    int i, j, k;
+
+    for (i = ix; i < ix + nx; i++)
+    {
+      for (j = iy; j < iy + ny; j++)
+      {
+        int top_index = SubvectorEltIndex(top_subvector, i, j, 0);
+        int mask_index = SubvectorEltIndex(mask_subvector, i, j, 0);
+        // check for cell outside watershed
+        if (mask_data[mask_index] > 0)
+        {
+          // SGS What to do if near bottom such that
+          // there are not exp_nz values?
+          int iz = (int)top_data[top_index] - (exp_nz - 1);
+
+          for (k = iz; k < iz + exp_nz; k++)
+          {
+            int pf_index = SubvectorEltIndex(subvector, i, j, k);
+            int exp_index = (i - ix + ghost_size_i_lower) +
+                            ((exp_nz - (k - iz) - 1) * exp_nx) +
+                            ((j - iy + ghost_size_j_lower) * (exp_nx * exp_nz));
+            exp_array[exp_index] = (float)(subvector_data[pf_index]) * scalar;
           }
         }
         else
