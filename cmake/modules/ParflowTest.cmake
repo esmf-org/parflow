@@ -130,3 +130,53 @@ function (pf_add_py_parallel_test test_name topology_P topology_Q topology_R)
   )
 
 endfunction()
+
+# Add parflow testing of an ESMX run
+function (pf_add_esmx_test)
+  set(optionArgs "")
+  set(singleValueArgs "NAME" "CONFIG" "RANK")
+  set(multiValueArgs "FILES")
+  cmake_parse_arguments(ESMXTEST "${optionArgs}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN})
+  if (NOT ESMXTEST_NAME)
+    message(FATAL_ERROR "pf_add_esmx_test: NAME is required")
+    return()
+  endif()
+  if (NOT ESMXTEST_CONFIG)
+    message(FATAL_ERROR "pf_add_esmx_test: CONFIG is required")
+    return()
+  endif()
+  if (NOT ESMXTEST_RANK)
+    set(ESMXTEST_RANK 1)
+  endif()
+  if (NOT ESMXTEST_FILES)
+    set(ESMXTEST_FILES "")
+  endif()
+
+  if (NOT PARFLOW_ENABLE_ESMX)
+    message(WARNING "Skipping ESMX test '${ESMXTEST_NAME}': PARFLOW_ENABLE_ESMX=ON is required")
+    return()
+  endif()
+
+  add_test(
+    NAME "esmx_${ESMXTEST_NAME}"
+    COMMAND ${CMAKE_COMMAND}
+            "-DTEST_NAME=${ESMXTEST_NAME}"
+            "-DTEST_CONFIG=${ESMXTEST_CONFIG}"
+            "-DTEST_FILES=${ESMXTEST_FILES}"
+            "-DTEST_RUNDIR=${CMAKE_BINARY_DIR}/Testing/Run/ESMX"
+            "-DESMX_EXE=${CMAKE_BINARY_DIR}/ESMX/esmx_parflow"
+            "-DMPIEXEC=${MPIEXEC}"
+            "-DMPIEXEC_NUMPROC_FLAG=${MPIEXEC_NUMPROC_FLAG}"
+            "-DMPIEXEC_RANKS=${ESMXTEST_RANK}"
+            "-DMPIEXEC_PREFLAGS=${MPIEXEC_PREFLAGS}"
+            "-DMPIEXEC_POSTFLAGS=${MPIEXEC_POSTFLAGS}"
+            -P ${CMAKE_SOURCE_DIR}/cmake/modules/RunESMXTest.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  set_tests_properties(
+    "esmx_${ESMXTEST_NAME}"
+    PROPERTIES
+      ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/pftools/python:$ENV{PYTHONPATH};PF_SRC=${PROJECT_SOURCE_DIR}"
+  )
+
+endfunction()

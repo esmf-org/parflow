@@ -3,7 +3,5 @@ application:
 
 components:
   parflow:
-    build_type: none
-    cmake_config: ParFlow.cmake
-    libraries: parflow_nuopc
+    cmake_target: parflow_nuopc
     fort_module: parflow_nuopc.mod
