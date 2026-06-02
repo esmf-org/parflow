@@ -630,13 +630,16 @@ module parflow_nuopc
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
     endif
 
+    call field_init_metadata(is%wrap%nz, is%wrap%cplnz, is%wrap%cpldz, rc)
+    if (ESMF_STDERRORCHECK(rc)) return  ! bail out
+
     call field_init_internal(internalFB=is%wrap%pf_fields, &
-      grid=pfgrid, nz=is%wrap%nz, rc=rc)
+      grid=pfgrid, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
     call field_realize(fieldList=pf_nuopc_fld_list, &
       importState=importState, exportState=exportState, &
-      grid=pfgrid, num_soil_layers=is%wrap%cplnz, &
+      grid=pfgrid, &
       realizeAllImport=is%wrap%realize_all_import, &
       realizeAllExport=is%wrap%realize_all_export, &
       rc=rc)
@@ -988,7 +991,7 @@ module parflow_nuopc
           line=__LINE__, file=__FILE__, rcToReturn=rc)
         return
       endif
-      call field_prep_export(exportState, is%wrap%nz, is%wrap%cplnz, rc=rc)
+      call field_prep_export(exportState, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
       call NUOPC_SetTimestamp(exportState, time=currTime, rc=rc)
       if (ESMF_STDERRORCHECK(rc)) return  ! bail out
@@ -1180,8 +1183,7 @@ module parflow_nuopc
     endif
 
     ! prepare import data
-    call field_prep_import(importState, is%wrap%nz, is%wrap%cplnz, &
-      is%wrap%cpldz, forcType, rc=rc)
+    call field_prep_import(importState, forcType, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
     totalLWidth = 0
@@ -1263,7 +1265,7 @@ module parflow_nuopc
     endif
 
     ! prepare export data
-    call field_prep_export(exportState, is%wrap%nz, is%wrap%cplnz, rc=rc)
+    call field_prep_export(exportState, rc=rc)
     if (ESMF_STDERRORCHECK(rc)) return  ! bail out
 
     is%wrap%prevTime = currTime
